@@ -6,21 +6,20 @@ using Plots
 include("include/FiniteDifference.jl")
 include("include/runner.jl")
 
+# This is at fixed d = 4, with d-1-dimensional regulators. Feel free to generalize this to arbitrary dimensions
+
 ##################################################
 ## Global definitions
 ##################################################
 
 # parameter struct holding all model parameters
-struct ParametersQM
+struct ParametersON
   grid::Array{Float64} # the grid
   n_fields::Int # number of fields - for this model, it's just mπ²
-  Nf::Int # number of flavors
-  Nc::Int # number of colors
+  N::Int # SO(N) symmetry group
   Λ::Float64 # UV cutoff scale
   λ::Float64 # quartic coupling of the mesons at UV scale
   mϕ2::Float64 # mass of the mesons at UV scale
-  hϕ::Float64 # Yukawa coupling
-  μ::Float64 # quark chemical potential
   T::Float64 # temperature
 end
 
@@ -35,25 +34,18 @@ buffer2 = 0
 ## Flow equations
 ##################################################
 
-# the quark contributions to the flow of V_k(ρϕ)
-@fastmath function quarkFlow(ρϕ, μq, hϕ, k, T, Nc, Nf)
-  Eq = sqrt(k^2 + hϕ^2 * ρϕ / Nf)
-  return Nc * Nf * (k^5 * (-tanh((Eq - μq) / (2 * T)) - tanh((Eq + μq) / (2 * T)))) / (6 * Eq * π^2)
-end
-
 # all meson contributions to the flow of V_k(ρϕ)
-@fastmath function mesonFlow(mπ2, mσ2, k, T, Nf)
+@fastmath function mesonFlow(mπ2, mσ2, k, T, N)
   flowπ = (k^5 * coth(sqrt(k^2 + mπ2) / (2 * T))) / (12 * sqrt(k^2 + mπ2) * π^2)
   flowσ = (k^5 * coth(sqrt(k^2 + mσ2) / (2 * T))) / (12 * sqrt(k^2 + mσ2) * π^2)
-  return flowσ + (Nf^2 - 1) * flowπ
+  return flowσ + (N - 1) * flowπ
 end
 
 ##################################################
 ## Kernel and Initialization function
 ##################################################
 
-
-@fastmath @inbounds function kernel!(du, u, p::ParametersQM, t)
+@fastmath @inbounds function kernel!(du, u, p::ParametersON, t)
   println("time: ", t)
 
   # In the above, we have the identification
@@ -88,12 +80,9 @@ end
   # Obtain a temporary array for the flux storage
   flux = get_tmp(buffer2, zero(du[1]))
 
-  # evaluate the flows
+  # evaluate the flows, note the minus sign, as we have defined t to be positive!
   try
-    @.. thread = true flux .= -(quarkFlow.(ρϕ_grid, p.μ, p.hϕ, k, p.T, p.Nc, p.Nf)
-                                .+
-                                mesonFlow.(u, Ms2, k, p.T, p.Nf)
-    )
+    @.. thread = true flux .= -(mesonFlow.(u, Ms2, k, p.T, p.N))
   catch e
     # In case of a failure, invalidate the result, so that the solver can try again
     du .= NaN
@@ -107,7 +96,7 @@ end
   nothing
 end
 
-function init(::typeof(kernel!), p::ParametersQM)
+function init(::typeof(kernel!), p::ParametersON)
   # first, create the buffers for the kernel
   # a buffer holds one field component, therefore its size is size(p.grid)[1:end-1]
   barr = zeros(Float64, (size(p.grid)[1:end-1]...))
@@ -139,7 +128,7 @@ grid[:, 1] = Ωϕ[:]
 ##################################################
 
 # set up the parameters
-parameters = ParametersQM(grid, 1, 2, 3, 0.65, 71.6, 0.0, 7.2, 0.0, 1e-2);
+parameters = ParametersON(grid, 1, 4, 0.65, 71.6, -0.3, 1e-2);
 # show the parameters
 dump(parameters)
 

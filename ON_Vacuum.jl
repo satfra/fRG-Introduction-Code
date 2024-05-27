@@ -2,9 +2,12 @@ using OrdinaryDiffEq, LinearAlgebra
 using SparseArrays, FastBroadcast, PreallocationTools
 using BenchmarkTools
 using Plots
+using SpecialFunctions
 
 include("include/FiniteDifference.jl")
 include("include/runner.jl")
+
+# This is for arbitrary dimensions
 
 ##################################################
 ## Global definitions
@@ -12,13 +15,13 @@ include("include/runner.jl")
 
 # parameter struct holding all model parameters
 struct ParametersON
+  d::Float64 # dimension of space
   grid::Array{Float64} # the grid
   n_fields::Int # number of fields - for this model, it's just mπ²
   N::Int # SO(N) symmetry group
   Λ::Float64 # UV cutoff scale
   λ::Float64 # quartic coupling of the mesons at UV scale
   mϕ2::Float64 # mass of the mesons at UV scale
-  T::Float64 # temperature
 end
 
 # for verbosity, the field directions. Here, there's only one, ρϕ = σ² / 2. Note, that this is just the Index!
@@ -28,15 +31,20 @@ const ρϕ = 1
 buffer1 = 0
 buffer2 = 0
 
+# Function for the surface of a d-dimensional sphere
+@fastmath function Ω(d)
+  return 2 * π^(d / 2) / gamma(d / 2)
+end
+
 ##################################################
 ## Flow equations
 ##################################################
 
 # all meson contributions to the flow of V_k(ρϕ)
-@fastmath function mesonFlow(mπ2, mσ2, k, T, N)
-  flowπ = (k^5 * coth(sqrt(k^2 + mπ2) / (2 * T))) / (12 * sqrt(k^2 + mπ2) * π^2)
-  flowσ = (k^5 * coth(sqrt(k^2 + mσ2) / (2 * T))) / (12 * sqrt(k^2 + mσ2) * π^2)
-  return flowσ + (N - 1) * flowπ
+@fastmath function mesonFlow(mπ2, mσ2, k, N, d)
+  flowπ = 1 / (k^2 + mπ2)
+  flowσ = 1 / (k^2 + mσ2)
+  return Ω(d) / (2π)^d * k^(d+2) / d *  (flowσ + (N - 1) * flowπ)
 end
 
 ##################################################
@@ -80,7 +88,7 @@ end
 
   # evaluate the flows, note the minus sign, as we have defined t to be positive!
   try
-    @.. thread = true flux .= -(mesonFlow.(u, Ms2, k, p.T, p.N))
+    @.. thread = true flux .= -(mesonFlow.(u, Ms2, k, p.N, p.d))
   catch e
     # In case of a failure, invalidate the result, so that the solver can try again
     du .= NaN
@@ -126,7 +134,7 @@ grid[:, 1] = Ωϕ[:]
 ##################################################
 
 # set up the parameters
-parameters = ParametersON(grid, 1, 4, 0.65, 71.6, -0.3, 1e-2);
+parameters = ParametersON(4, grid, 1, 1, 0.65, 71.6, -0.2);
 # show the parameters
 dump(parameters)
 
