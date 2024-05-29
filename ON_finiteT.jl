@@ -128,7 +128,7 @@ grid[:, 1] = Ωϕ[:]
 ##################################################
 
 # set up the parameters
-parameters = ParametersON(grid, 1, 4, 0.65, 71.6, -0.3, 1e-2);
+parameters = ParametersON(grid, 1, 4, 0.65, 71.6, -0.3, 1e-1);
 # show the parameters
 dump(parameters)
 
@@ -153,3 +153,41 @@ result_data_end = reshape(result.u[end], (size(parameters.grid)[1:end-1]..., par
 plot(Ωϕ, result_data_start[:, 1], label="t = 0")
 plot!(Ωϕ, result_data_mid[:, 1], label="t = 1")
 plot!(Ωϕ, result_data_end[:, 1], label="t = 5")
+
+##################################################
+# Phase diagram
+##################################################
+
+# extract the order parameter from the result of a run
+function orderParameter(result)
+  # get the last time step
+  u = result.u[end]
+  # find the first idx of u that is > 0
+  idx = findfirst(u .> 0)
+  # the order parameter is the coordinate belonging to this Index
+  return result.prob.p.grid[idx, 1]
+end
+
+# create a grid of m2 and T
+m2 = -0.3:0.01:0.1
+T = 0.01:0.01:0.1
+
+# create a matrix to hold the order parameter
+order = zeros(Float64, length(m2), length(T))
+
+# run simulations for all m2 and T
+for i in 1:length(m2)
+  for j in 1:length(T)
+    # set up the parameters
+    parameters = ParametersON(grid, 1, 4, 0.65, 71.6, m2[i], T[j])
+    # set up the ODE entry; this gives the ODE solver all the information it needs to solve the ODE
+    entry = ODEentry(:(QNDF()), kernel!, odeargs, parameters, 5.0)
+    # run the ODE solver
+    result = run(entry, jac_sparsity)
+    # store the order parameter
+    order[i, j] = orderParameter(result)
+  end
+end
+
+# plot the phase diagram
+heatmap(T, m2, order, xlabel="T", ylabel="m²", title="Phase diagram", c=:viridis)

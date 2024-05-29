@@ -166,3 +166,9 @@ result_data_end = reshape(result.u[end], (size(parameters.grid)[1:end-1]..., par
 plot(Ωϕ, result_data_start[:, 1], label="t = 0")
 plot!(Ωϕ, result_data_mid[:, 1], label="t = 1")
 plot!(Ωϕ, result_data_end[:, 1], label="t = 5")
+
+##################################################
+# Phase diagram
+##################################################
+
+#...
