@@ -2,6 +2,7 @@ using OrdinaryDiffEq, LinearAlgebra
 using SparseArrays, FastBroadcast, PreallocationTools
 using BenchmarkTools
 using Plots
+using SpecialFunctions
 
 include("include/FiniteDifference.jl")
 include("include/runner.jl")
